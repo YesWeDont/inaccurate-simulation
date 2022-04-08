@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spring</title>
+    <style>
+        html, body, canvas{
+            height:100%;
+            width:100%;
+            margin:0;
+        }
+        .control-panel{
+            font:20px Consolas;
+            position: fixed;
+            top:0;
+            margin:0 10px;
+            background: #fff;
+        }
+        label{
+            font:initial;
+        }
+        .energy-breakdown{
+            margin-left:30px;
+        }
+        p{
+            margin:0;
+        }
+        input{
+            width:150px;
+        }
+        h1, h2, h3, h4, h5, h6{
+            margin:10px 0 0 0;
+        }
+    </style>
+</head>
+<body>
+    <canvas></canvas>
+    <div class="control-panel" style="background:#fff0">
+            <div class="data">
+                <h5>Simulation *LIVE* Data</h5>
+                <h6>Access all live data from the console</h6>
+                <p>FPS:<span class="fps">0</span></p>
+                <p>∑E:<span class="energy-total">0</span></p>
+                <!--der = derivative-->
+                <div class="energy-breakdown">
+                    <p>KE :<span class="energy-breakdown-ke">0</span></p>
+                    <p>GPE:<span class="energy-breakdown-gpe">0</span></p>
+                    <p>SPR:<span class="energy-breakdown-spr">0</span></p>
+                </div>
+                <p>dE/dt: <span class="power-current">0</span></p>
+                <p>Power: <span class="power-accumulative">0</span></p>
+                <p>Angular Momentum: <span class="angular-momentum">0</span></p>
+                <p>T: <span class="time-passed">0</span></p>
+            </div>
+            <h5>Constants and Conditions</h5>
+            <input type="range" name="g" class="g" min=0 max=100 value=9.81 step=0.1>
+            <label for="g">Gravity: <span>9.81</span>px s-2</label><br>
+            <input type="range" name="springConstant" class="springConstant" min=0.1 max=10 value=1 step=0.1>
+            <label for="springConstant">Spring Constant: <span>1</span>kg s-2</label><br>
+            <input type="range" name="springNLength" class="springNLength" min=0 max=150 value=100 step=10>
+            <label for="springNLength">Spring Natural Length: <span>100</span></label><br>
+            <input type="range" name="m" class="m" min=0.1 max=10 value=1 step=0.1>
+            <label for="m">Mass: <span>1</span></label><br>
+            <input type="range" name="trackerLength" class="trackerLength" min=0 max=10000 value=4000 step=500>
+            <label for="trackerLength">Tracker Length: <span>4000</span></label>
+            <hr>
+            <h5>Physics Engine</h5>
+            <select class="integrator" name="integrator">
+                <option value="3/8">Modified Runge-Kutta/3:8</option>
+                <option value="rk4" selected>Classic Runge-Kutta/RK4</option>
+                <option value="heun">Modified Euler/Heun</option>
+                <option value="euler">Euler</option>
+            </select>
+            <label for="integrator" title="Ordered from most computationally intensive + accurate to least">Intergrator type ❔</label><br>
+            <input type="range" name="tM" class="tM" min=0.2 max=5 value=1>
+            <label for="tM" title="Speeds up sim at the cost of accuracy">Time multiplier(unstable) ❔: <span>1</span>x</label><br>
+            <input type="range" name="framesEmulated" class="framesEmulated" min=1 max=50 value=1>
+            <label for="framesEmulated" title="The higher this value, the more accurate, but more CPU-intensive">Accuracy ❔: <span>1</span></label><br>
+            <button class="pause">(Un)pause</button><button class="reset">Reset</button><br>
+        </div>
+        
+    </div>
+    <script>
+        "use strict";
+        let intergrator = 'euler';
+        let g = 9.81,
+        m = 1,
+        springConst = 1,
+        springNLength = 100,
+        justReset = false,
+        framesEmulated = 1,
+        pause = false,
+        tM = 1,
+        trackerLength = 4000,
+
+        system;
+        const {sin, cos, atan, sign:sgn,hypot, round, random } = Math;
+        
+        let can, ctx;
+        document.addEventListener("DOMContentLoaded",()=>{
+            //queryselected
+            can = document.querySelector("canvas");
+            ctx = can.getContext("2d");
+            can.height = innerHeight;
+            can.width = innerWidth;
+            ctx.font = "20px Consolas";
+            let observer = new ResizeObserver(()=>{
+                console.log("Resized Window")
+                ctx.canvas.height = innerHeight;
+                ctx.canvas.width = innerWidth;
+                ctx.font="20px Consolas"
+            });
+            observer.observe(document.body);
+            let integratorSelect = document.querySelector('select.integrator');
+            integratorSelect.addEventListener('change', ()=>{
+                console.warn("Integrator switched to", intergrator = integratorSelect.value, ", sim may be unstable");
+            })
+            document.querySelector("button.pause").addEventListener("click", ()=>{
+                if(pause) pause = false;
+                else pause = true;
+            })
+            document.querySelector("button.reset").addEventListener("click", ()=>{
+                intergrator = 'rk4';
+                g = 9.81,
+                m = 1,
+                springConst = 1,
+                springNLength = 100,
+                framesEmulated = 30,
+                pause = false,
+                tM = 1,
+                trackerLength = 4000;
+                document.querySelector("select.integrator").value = intergrator;
+                document.querySelector("input.g").value = g;
+                document.querySelector("label[for=g] > span").innerHTML = g;
+                document.querySelector("input.m").value = m;
+                document.querySelector("label[for=m] > span").innerHTML = m;
+                document.querySelector("input.springConstant").value = springConst;
+                document.querySelector("label[for=springConstant] > span").innerHTML = springConst;
+                document.querySelector("input.springNLength").value = springNLength;
+                document.querySelector("label[for=springNLength] > span").innerHTML = springNLength;
+                document.querySelector("input.framesEmulated").value = framesEmulated;
+                document.querySelector("label[for=framesEmulated] > span").innerHTML = framesEmulated;
+                document.querySelector("input.tM").value = tM;
+                document.querySelector("label[for=tM] > span").innerHTML = tM;
+                document.querySelector("input.trackerLength").value = trackerLength;
+                document.querySelector("label[for=trackerLength] > span").innerHTML = trackerLength;
+            })
+            document.querySelectorAll("input[type=range]").forEach((a)=>{
+                a.addEventListener("change", ()=>{
+                    if(a.className === "g") g = parseFloat(a.value)
+                    else if(a.className==="springConstant") springConst = parseFloat(a.value)
+                    else if(a.className === "springNLength") springNLength = parseFloat(a.value)
+                    else if(a.className === "framesEmulated") framesEmulated = parseFloat(a.value)
+                    else if(a.className === "m") m = parseFloat(a.value)
+                    else if(a.className === "tM") tM = parseFloat(a.value)
+                    else if(a.className === "trackerLength") trackerLength = parseFloat(a.value)
+                    requestIdleCallback(()=>document.querySelector(`label[for=${a.className}] > span`).innerHTML = a.value)
+                    justReset=true;
+                })
+            })
+            //init system
+            console.log("Access the system via the `system` variable")
+            system = loadPendulum({...generateConditions()})
+        })
+        function generateConditions(){
+            let x = random() * 200 - 100,
+            y = sgn(random()-0.5) * Math.sqrt(springNLength**2 - x**2),
+            vx = 30 * (random()-0.5) *2,
+            vy = 30 * (random()-0.5) *2;
+            return {
+                state:[x,y, vx, vy]
+            }
+        }
+        function loadPendulum(conditions){
+            let controlPanel= document.querySelector('.control-panel');
+            const fps = controlPanel.querySelector('.fps'),
+            energyTotal = controlPanel.querySelector('.energy-total'),
+            energyBreakdownKE = controlPanel.querySelector('.energy-breakdown-ke'),
+            energyBreakdownGPE = controlPanel.querySelector('.energy-breakdown-gpe'),
+            energyBreakdownSPR = controlPanel.querySelector('.energy-breakdown-spr'),
+            powerCurrent = controlPanel.querySelector('.power-current'),
+            powerAccumulative = controlPanel.querySelector('.power-accumulative'),
+            timePassed = controlPanel.querySelector('.time-passed'),
+            angularMomentum = controlPanel.querySelector('.angular-momentum');
+            let t = 0,
+            x = conditions.state[0],
+            y = conditions.state[1],
+            vx = conditions.state[2],
+            vy = conditions.state[3],
+            e_initial = 0,
+            energy = e_initial,
+            f=0,
+            tracks = [];
+            let springLength = hypot(x, y);
+            function update(_t){
+                if(!_t) _t = Date.now()
+                try{
+                    if(pause) return;
+                    if(!t) return energy = e_initial = e("m");
+                    f++;
+                    let dt = (_t - t)/1000,
+                    accelx = 0, accely = 0;
+                    if(dt > 1/30) return;
+                    dt*=tM;
+                    
+
+                    
+                    for(let i = 0; i<framesEmulated; i++){
+                        let _dt = dt/framesEmulated
+                        if(intergrator === "3/8"){
+                            let k1 = nextFrame(x,y,vx, vy, _dt),
+                            k2 = nextFrame(_dt/3, x + k1[0]/3, y + k1[1]/3, vx + k1[2]/3 , vy + k1[3]/3),
+                            k3 = nextFrame(2*_dt/3, x + k2[0] - k1[0]/3, y + k2[1] - k1[1]/3, vx + k2[2] - k1[2]/3, vy + k2[3] - k1[3]/3),
+                            k4 = nextFrame(x + k1[0] - k2[0] + k3[0], y + k1[1] - k2[1] + k3[1], vx + k1[2] - k2[2] + k3[2], vy + k1[3] - k2[3] + k3[3], _dt);
+
+                            x += (k1[0] + 3*k2[0] + 3*k3[0] + k4[0])/8;
+                            y += (k1[1] + 3*k2[1] + 3*k3[1] + k4[1])/8;
+                            vx += (k1[2] + 3*k2[2] + 3*k3[2] + k4[2])/8;
+                            vy += (k1[3] + 3*k2[3] + 3*k3[3] + k4[3])/8;
+                            accelx = (k1[4] + 3*k2[4] + 3*k3[4] + k4[4])/8;
+                            accely = (k1[5] + 3*k2[5] + 3*k3[5] + k4[5])/8;
+                        }else if(intergrator === "rk4"){
+                            //👍👍👍👍👍
+                            // let newState = tableau([[1/2, 1/2], [1/2, 0, 1/2], [1, 0, 0, 1/2], [1/6, 1/3, 1/3, 1/6]],[x,y,vx,vy], _dt);
+                            // x += newState[0];
+                            // y+=newState[1];
+                            // vx+=newState[2];
+                            // vy+=newState[3];
+                            // accelx = newState[4],
+                            // accely = newState[5];
+                            let k1 = nextFrame(_dt,x,y,vx, vy),
+                            k2 = nextFrame(_dt/2, x + k1[0]/2, y + k1[1]/2, vx + k1[2]/2 , vy + k1[3]/2),
+                            k3 = nextFrame(_dt/2, x + k2[0]/2, y + k2[1]/2, vx + k2[2]/2 , vy + k2[3]/2),
+                            k4 = nextFrame(_dt,x + k3[0], y+k3[1], vx + k3[2], vy + k3[3]);
+
+                            x += (k1[0] + 2*k2[0] + 2*k3[0] + k4[0])/6;
+                            y += (k1[1] + 2*k2[1] + 2*k3[1] + k4[1])/6;
+                            vx += (k1[2] + 2*k2[2] + 2*k3[2] + k4[2])/6;
+                            vy += (k1[3] + 2*k2[3] + 2*k3[3] + k4[3])/6;
+                            accelx = (k1[4] + 2*k2[4] + 2*k3[4] + k4[4])/6;
+                            accely = (k1[5] + 2*k2[5] + 2*k3[5] + k4[5])/6;
+                        }else if(intergrator === "heun"){
+                            let k1 = nextFrame(_dt,x,y,vx,vy);
+                            let k2 = nextFrame( _dt,x+k1[0],y+k1[1], vx+k1[2], vy+k1[3]);
+                            x += (k1[0] + k2[0])/2;
+                            y += (k1[1] + k2[1])/2;
+                            vx += (k1[2] + k2[2])/2;
+                            vy += (k1[3] + k2[3])/2;
+                            accelx = (k1[4] + k2[4])/2;
+                            accely = (k1[5] + k2[5])/2;
+                        }else{
+                            //🤮🤮🤮🤮🤮
+                            let k1 = nextFrame(_dt, x,y,vx,vy);
+                            x += k1[0];
+                            y += k1[1];
+                            vx += k1[2];
+                            vy += k1[3];
+                            accelx = k1[4];
+                            accely = k1[5];
+                        }
+                    }
+
+                    springLength = hypot(x, y);
+                    /*if(f % 10 === 1) console.log(`
+                    Coords: ${x}, ${y}
+                    V: ${vx}, ${vy} (${hypot(vx, vy)})
+                    A: ${accely} ${accely} (${hypot(accelx, accely)})
+                    Spr: ${springLength}
+                    T: ${atan(-x/y)/Math.PI * 180} rad
+                    E: ${e("k")} KE, ${e("s")} SPE, ${e("k")} PE\nE: ${e("m")}
+                    `)*/
+
+                    //📊
+                    if(f % 60 === 0) requestIdleCallback((deadline)=>{
+                        //if timedout, wait 500 more ms
+                        if(deadline.didTimeout) return
+                        const [k, p, s] = [e('k'), e('p'), e('s')],
+                        m = k+p+s,
+                        powerN = m-energy,
+                        timeBetweenFrames = 60 * dt/tM,
+                        totalTime=t/1000;
+                        if(justReset) return (justReset=false, (e_initial = energy = m));
+                        fps.innerHTML = round(1/dt);
+                        energyTotal.innerHTML = round(m);
+                        energyBreakdownKE.innerHTML = round(k);
+                        energyBreakdownGPE.innerHTML = round(p);
+                        energyBreakdownSPR.innerHTML = round(s);
+                        powerCurrent.innerHTML = `${round((powerN/timeBetweenFrames))} / ${(powerN/timeBetweenFrames/m* 100).toFixed(4)}%`
+                        powerAccumulative.innerHTML = `${round((m - e_initial)/totalTime)} / ${((m - e_initial)/e_initial/totalTime*100 ).toFixed(3)}%`;
+                        timePassed.innerHTML = round(totalTime)
+                        angularMomentum.innerHTML = round(momentumAngular())
+                        energy = m
+                    }, {timeout:500});
+
+                    
+                    let tx = innerWidth/2, ty = innerHeight/2;
+                    ctx.clearRect(0,0, innerWidth, innerHeight);
+
+                    if(!conditions?.disableTracker) {
+                        //Motion 📈📉
+                        ctx.lineWidth=3;
+                        ctx.strokeStyle="blue";
+                        ctx.beginPath()
+                        for(let i of tracks){
+                            ctx.lineTo(...i)
+                        }
+                        ctx.stroke();
+                        tracks.push([tx+x, ty+y]);
+                        tracks = tracks.slice(-(trackerLength||1))
+                    }
+
+                    if(conditions?.noRender || (conditions.renderFrequency && f % conditions.renderFrequency !==0)) return;
+                    //pendulum
+                    ctx.lineWidth = springLength/springNLength * 3;
+                    ctx.strokeStyle = "#888"
+                    ctx.beginPath();
+                    ctx.moveTo(tx, ty);
+                    ctx.lineTo(tx+x, ty+y);
+                    ctx.stroke()
+                    ctx.beginPath()
+                    ctx.arc(tx + x, ty + y, 10, 0, Math.PI *2);
+                    ctx.fill();
+
+                    
+
+                    // V & A tracker
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = "red";
+                    ctx.beginPath()
+                    ctx.moveTo(tx+x, ty+y);
+                    ctx.lineTo(tx+x+accelx, ty+y+accely);
+                    ctx.stroke();
+                    ctx.strokeStyle="green"
+                    ctx.beginPath()
+                    ctx.moveTo(tx+x, ty+y);
+                    ctx.lineTo(tx+x+vx, ty+y+vy);
+                    ctx.stroke();
+                    
+                }finally{
+                    requestAnimationFrame(update)
+                    t = _t;
+                }
+            }
+            requestAnimationFrame(update)
+            //energy logger
+            function e(t){
+                let ke = 0.5 * m * (vx**2 + vy**2);
+                let se = 0.5 * springConst * ((springLength -springNLength)**2);
+                let gpe = -m*g*y;
+                if(t === "m" || !t) return ke + se + gpe;
+                else if(t==="k") return ke;
+                else if(t==="p") return gpe;
+                else if(t==="s") return se;
+                else throw new Error(`${t} should be m, k, p or s. Instead got ${t}`)
+            }
+            return {
+                get state(){
+                    return [x, y, vx, vy];
+                },
+                state0:conditions.state,
+                energy:e
+            }
+            function nextFrame(step,x, y, vx, vy){
+                // let theta = atan(-x/y),
+                // springMag = (springNLength - hypot(x, y)) * springConst
+                // let ax = sgn(x) *springMag *Math.abs(sin(theta)) / m,
+                // ay = sgn(y) * springMag *Math.abs(cos(theta)) / m + g;
+                // //let ax1 = -sgn(x1) * (springMag * sin(theta)) / m,
+                // //ay1 = -sgn(y1) * (springMag * cos(theta)) / m + g
+                // //This 2nd degree DE is also cool 👆👆
+                let springMag = (springNLength - hypot(x, y)) * springConst / hypot(x, y),
+                ax = springMag *x / m,
+                ay = springMag *y / m + g;
+                return [
+                    (vx*step + ax * (step ** 2) / 2),
+                    (vy*step + ay * (step ** 2) / 2),
+                    ax * step,
+                    ay * step,
+                    ax,
+                    ay
+                ]
+            }
+            //Bucher tableau format
+            function tableau(table, prevState, dt, slopeFn=nextFrame){
+                let k = [];
+                k.push(slopeFn(dt, ...prevState))
+                for(let i = 0; i<table.length-1; i++){
+                    let t = table[i][0] * dt;
+                    //calculate the bias in state due to previous conditions
+                    let state = table[i].slice(1).reduce((previous, rowCell, cellIndex)=>{
+                        return previous.map((prevValue, i)=>{
+                            return prevValue + k[cellIndex][i] * rowCell;
+                        })
+                    }, prevState);
+                    k.push(slopeFn(t, ...state))
+                }
+                return k.reduce((ps,state, kNum)=>state.map((v, i)=>ps[i]+table[table.length-1][kNum] * v), [0,0,0,0])
+            }
+            function momentumAngular(){
+                return hypot(vx, vy) * hypot(x, y) * m
+            }
+        }
+    </script>
+</body>
+</html>

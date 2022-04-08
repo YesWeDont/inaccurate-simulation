@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        *{
+            width:100vw;
+            height:100vh;
+            margin:0;
+        }
+    </style>
+</head>
+<body>
+    <canvas></canvas>
+    <script>
+        //consts
+        const t_m=1
+        const c = {
+            m1:1,
+            m2:2,
+            l1:100,
+            l2:100,
+            g:9.81,
+            timeMulti:t_m,
+            max_tracker_length:1000/t_m,
+        };
+        //state
+        let s = {
+            //current thetas
+            t1:Math.PI /4,
+            t2:Math.PI / 4,
+            t:0,
+            // d theta/dt
+            d:{
+                t1:Math.PI/6,
+                t2:Math.PI/6
+            }
+        }
+        let ctx;
+        let prev1 = [], prev2 = []
+        let {cos, sin} = Math;
+        function update(_t){
+            try{
+                if(!s.t) return t=Date.now();
+                let dt = (_t - s.t)/1000*c.timeMulti;
+                //hunk of differentials
+                let dth = s.t1 - s.t2
+                let a = c.m1 + c.m2*(sin(dth) ** 2);
+                let tM = c.m1+c.m2;
+                let mu = 1 + c.m1/c.m2;
+                //(g*(Math.sin(Phi2)*Math.cos(Phi1-Phi2)-mu*Math.sin(Phi1))-(l2*dPhi2*dPhi2+l1*dPhi1*dPhi1*Math.cos(Phi1-Phi2))*Math.sin(Phi1-Phi2))/(l1*(mu-Math.cos(Phi1-Phi2)*Math.cos(Phi1-Phi2)));
+                //(mu*g*(Math.sin(Phi1)*Math.cos(Phi1-Phi2)-Math.sin(Phi2))+(mu*l1*dPhi1*dPhi1+l2*dPhi2*dPhi2*Math.cos(Phi1-Phi2))*Math.sin(Phi1-Phi2))/(l2*(mu-Math.cos(Phi1-Phi2)*Math.cos(Phi1-Phi2)));
+
+                // let at1 = (c.g*(sin(s.t2)*cos(dth)-mu*sin(s.t1))-(s.l2*(s.d.t2**2)+c.l1*(s.d.t1 ** 2)*cos(dth))*sin(dth))/(c.l1*(mu-(cos(dth) ** 2)));
+                // let at2 = (mu*c.g*(sin(s.t1)*cos(dth)-sin(s.t2))+(mu*c.l1*(s.d.th1**2 )+c.l2*(s.d.t2 **2)*cos(dth))*sin(dth))/(c.l2*(mu-(cos(dth)**2)));
+                
+                // let at1 = (c.g * (sin(s.t2) * cos(dth) - mu * sin(s.t1)) - (c.l2 * (s.d.t2 **2) + c.l1 * (s.d.t1 ** 2) * cos(dth)) * sin(dth) ) / (c.l1 * (mu - (cos(dth) ** 2 ) ));
+                // let at2 = ((c.g * mu * (sin(s.t1) * cos(dth) - sin(s.t2)) )+( mu * c.l1 * (s.d.t1 ** 2) + c.l2 * (s.d.t2 **2) * cos(dth)) * sin(dth))/(c.l2 * (mu - (cos(dth) ** 2) ));
+                let at1 = -(sin(dth * (c.m2 * c.l1 * (s.d.t1**2 ) * cos(dth) + c.m2 * c.l2 * (s.d.t2**2) )) + c.g * (tM * sin(s.t1) - c.m2 * sin(s.t2) * cos(dth) ))/(c.l1 * a);
+                let at2 = (sin(dth * tM * c.l1 * (s.d.t1 **2) + c.m2 * c.l2 * (s.d.t2**2) * cos(dth)) + c.g * (tM * sin(s.t1) * cos(dth) - tM * sin(s.t2) ))/(c.l2 * a);
+                // let at1 = (-c.g*(2*tM)*sin(s.t1) - c.m2*c.g*sin(dth- s.t2) - 2*sin(dth)*c.m2*((s.d.t2**2) *c.l2 + (s.d.t1 ** 2)*c.l1*cos(dth)))/(c.l1*(2*c.m1 + c.m2 - c.m2*cos(2*dth)))
+                // let at2 = (2*sin(dth)*((s.d.t1 ** 2) * c.l1 * tM + c.g*tM*cos(s.t1) + (s.d.t2**2) * c.l2 * c.m2 * cos(dth)))/(c.l2*(2*c.m1 + c.m2 - c.m2*cos(2*dth)))
+                //ut + 1/2 at^2
+                s.t1 += s.d.t1 * dt + 0.5 * at1 * (dt**2);
+                s.t2 += s.d.t2 * dt + 0.5 * at2 * (dt**2);
+                //save dt1 and dt2 first
+                s.d.t1 += at1 * dt;
+                s.d.t2 += at2 * dt;
+
+                let xy1 = [cos(s.t1) * c.l1         , sin(s.t1) * c.l1         ];
+                let xy2 = [xy1[0] + cos(s.t2) * c.l2, xy1[1] + sin(s.t2) * c.l2];
+                
+                //rendering
+                //coordinate transform first up
+                let transformby = [innerWidth/2, innerHeight/2]
+                let exy1 = transformby.map((a,i)=>a+xy1[i]),
+                exy2 = transformby.map((a,i)=>a+xy2[i]);
+                prev1.push(exy1);
+                prev2.push(exy2);
+                if(prev1.length > c.max_tracker_length/5) prev1.shift();
+                if(prev2.length > c.max_tracker_length) prev2.shift();
+                //draw the lines in
+                ctx.clearRect(0,0, innerWidth, innerHeight);
+                ctx.strokeStyle = "black"
+                ctx.beginPath()
+                ctx.moveTo(...transformby);
+                ctx.lineTo(...exy1);
+                ctx.lineTo(...exy2);
+                ctx.stroke();
+                ctx.strokeStyle = "blue"
+                ctx.beginPath();
+                for(let i of prev1){
+                    ctx.lineTo(...i)
+                }
+                ctx.stroke()
+                ctx.strokeStyle = "red"
+                ctx.beginPath();
+                for(let i of prev2){
+                    ctx.lineTo(...i)
+                }
+                ctx.stroke()
+                ctx.strokeStyle="black"
+                ctx.beginPath()
+                ctx.arc(...exy1, 10, 0, 2 * Math.PI);
+                ctx.arc(...exy2, 10, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.fillText("FPS = "+1/dt, 60, 10)
+            }finally{
+                s.t = _t;
+                requestAnimationFrame(update)
+            }
+        }
+        document.addEventListener("DOMContentLoaded", ()=>{
+            //start update
+            //set and get ctx stuff
+            let canvas = document.querySelector("canvas");
+            canvas.height = innerHeight;
+            canvas.width = innerWidth;
+            ctx = canvas.getContext("2d")
+            requestAnimationFrame(update)
+        })
+    </script>
+</body>
+</html>
