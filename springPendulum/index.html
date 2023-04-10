@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spring pendulum🏑 2.0</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔩</text></svg>">
+    <style>
+        div.panel {
+            font-size: 1em; top: 0; background: #9995;
+            position: fixed; user-select: none;
+            font-family: 'Consolas', 'Courier New', Courier, monospace;
+            padding-left: 1vw; font-weight: bold; width: 20vw;
+        }
+        .warning:not(.active){ cursor:no-drop; filter: grayscale(100%) }
+        /* .warning.active{ ; } */
+        .warning-wrap { background: #0005; padding: 5px; border-radius: 5px;; }
+    </style>
+</head>
+
+<body style="margin:0; overflow: hidden;">
+    <canvas></canvas>
+    <div class="panel">
+        <p class="warnings">
+            <span>WARNINGS: </span>
+            <span class="warning-wrap">
+                <span class="panel-hung-warn warning">❗</span>
+                <span class="energy-change-warn warning">🚨</span>
+                <span class="fps-warn warning">⏳</span>
+                <span class="not-rendered-warn warning">🎨</span>
+                <span class="pause-warn warning">⏸</span>
+                <span class="settings-too-quick-warn warning">🥵</span>
+            </span>
+        </p>
+        <button class="update">Manually update panel</button>
+        <button type="button" name="pause">Pause</button><br />
+        <h3>State</h3>
+        <ul>
+            <p title="Current length of spring">r: <span class="r">0.8</span>×r<sub>0</sub></p>
+            <p title="Angle with vertical">θ: <span class="theta">1.00</span>×π rad</p>
+            <p title="Rate of change of length of spring">dr/dt: <span class="rdot">0</span>×r<sub>0</sub>
+                s<sup>-1</sup></p>
+            <p" title="Rate of change of angle with horizontal">dθ/dt: <span class="thetadot">1.00</span>×π rad
+                s<sup>-1</sup></p>
+        </ul>
+        <h3>Stats</h3>
+        <ul>
+            <p>FPS: <span class="fps">0</span></p>
+            <p title="Total energy">ΣE: <span class="energy">0</span></p>
+            <ul>
+                <p title="Kinetic energy (energy due to the object's speed)">KE: <span class="ke">0</span>(<span
+                        class="ke-change">0.00%</span>)</p>
+                <p title="Gravitational potential energy (energy due to the object's height)">GPE: <span
+                        class="gpe">0</span>(<span class="gpe-change">0.00%</span>)</p>
+                <p title="Potential energy from spring (energy stored in compression or stretching of spring)">PE: <span
+                        class="pe">0</span>(<span class="pe-change">0.00%</span>)</p>
+            </ul>
+            <p title="% energy lost per unit time">(dE/dt)/E %:<span class="energy-change">0.00%</span></p>
+        </ul>
+        <h3>Settings</h3>
+        <ul>
+            <button class="reset-ctx">Reset canvas context</button><br>
+            <input type="range" min="-2" max="5" value="0" name="time-warp">
+            <label for="time-warp">Time warp: <span class="time-warp">100%</span></label><br />
+            <input type="range" min="0" max="5" value="1" step="0.1" name="trail-length">
+            <label for="trail-length" title="Length of trail (arbitary unit)">Trail length: <span
+                    class="trail-length">1</span></label><br />
+            <input type="range" min="0" max="50" value="9.8" step="0.1" name="g">
+            <label for="g" title="Strength of gravity (metres per second squared)">g: <span class="g">9.8</span> m
+                s<sup>-2</sup></label><br />
+            <input type="range" min="10" max="200" value="100" step="1" name="k">
+            <label for="k" title="Rebounding strength of spring (Newtons per meter stretched)">k: <span
+                    class="k">100</span> N m<sup>-1</sup></label><br />
+            <input type="range" min="0.1" max="100" value="10" step="0.1" name="m">
+            <label for="m" title="Mass of object (kilograms)">m: <span class="m">10</span> kg</label><br />
+            <input type="range" min="1" max="100" value="10" step="0.1" name="r0">
+            <label for="r0" title="Spring natural length (metres)">r<sub>0</sub>: <span class="r0">10</span>
+                m</label><br />
+            <input type="range" min="0.1" max="100" value="20" step="0.1" name="scale">
+            <label for="scale" title="Simulation scale (Pixels on screen per simulated metre)">Scale: <span
+                    class="scale">20</span> px m<sup>-1</sup></label><br />
+        </ul>
+    </div>
+    <script src="./dist/index.js" type="module"></script>
+</body>
+
+</html>
